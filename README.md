@@ -1,7 +1,7 @@
 # 🛡️ Secure Telemetry & Command Protocol for UAV / Military Vehicles
 
 > A hands-on computer-security project: **first break it, then defend it.**
-> An insecure drone command-and-control protocol is attacked (eavesdropping, replay, injection, MITM), then rebuilt with cryptography (AES-256, HMAC, key exchange, replay protection) so the same attacks fail.
+> An insecure UAV command-and-control protocol is attacked (eavesdropping, replay, injection, MITM), then rebuilt with cryptography (AES-256, HMAC, key exchange, replay protection) so the same attacks fail.
 
 ![Python](https://img.shields.io/badge/Python-3.15-blue?logo=python&logoColor=white)
 ![Cryptography](https://img.shields.io/badge/crypto-AES--256%20%7C%20HMAC%20%7C%20ECDH-green)
@@ -17,7 +17,7 @@ Unmanned aerial vehicles (UAVs) and military ground vehicles communicate with a 
 - **Telemetry (downlink):** position, speed, altitude, battery — vehicle → ground
 - **Commands (uplink):** "turn left", "climb", "return home" — ground → vehicle
 
-If this channel is unprotected, an attacker can **listen in, inject fake commands, replay old ones, or hijack the vehicle.** This is not theoretical: the widely used **MAVLink** protocol ships, by default, with **no encryption and no authentication**, and GPS/command spoofing of drones has been demonstrated in the real world.
+If this channel is unprotected, an attacker can **listen in, inject fake commands, replay old ones, or hijack the vehicle.** This is not theoretical: the widely used **MAVLink** protocol ships, by default, with **no encryption and no authentication**, and GPS/command spoofing of UAVs has been demonstrated in the real world.
 
 This project models that exact gap in two phases.
 
@@ -48,9 +48,9 @@ This project models that exact gap in two phases.
 
 ```mermaid
 graph LR
-    GCS[🖥️ Ground Control Station<br/>sends commands] <-->|UDP link| DRONE[🛩️ Drone<br/>sends telemetry]
+    GCS[🖥️ Ground Control Station<br/>sends commands] <-->|UDP link| UAV[🛩️ UAV<br/>sends telemetry]
     ATK[😈 Attacker] -.->|intercepts / injects| GCS
-    ATK -.->|intercepts / injects| DRONE
+    ATK -.->|intercepts / injects| UAV
 ```
 
 ## 🧰 Tech Stack
@@ -68,12 +68,16 @@ iha-guvenlik/
 ├── README.md
 ├── .gitignore
 ├── v1_insecure/        # Phase 2 of roadmap: the vulnerable system
-│   ├── drone.py            # sends plaintext telemetry, listens for commands
+│   ├── uav.py              # sends plaintext telemetry, listens for commands
 │   └── gcs.py              # sends commands
+├── dashboard/          # web-based GCS cockpit (Flask)
+│   ├── app.py              # serves the cockpit, bridges telemetry/commands
+│   └── templates/
+│       └── index.html      # live flight-instrument panel + GPS map
 ├── attacks/            # Phase 3: the exploits
 │   └── attacker.py         # eavesdrop / replay / inject
 ├── v2_secure/          # Phase 4: the hardened system
-│   ├── drone_secure.py
+│   ├── uav_secure.py
 │   ├── gcs_secure.py
 │   └── crypto_utils.py     # AES + HMAC + key exchange helpers
 └── docs/               # diagrams, screenshots, report
@@ -84,15 +88,18 @@ iha-guvenlik/
 
 ```bash
 # 1. Clone
-git clone https://github.com/onurhayta/secure-uav-telemetry-command-protocol.git
+git clone https://github.com/onurhayta/iha-guvenlik.git
 cd iha-guvenlik
 
 # 2. Install dependencies
-pip3 install cryptography matplotlib
+pip3 install cryptography matplotlib flask
 
 # 3. Run the insecure demo (two terminals)
-python3 v1_insecure/drone.py      # terminal 1
+python3 v1_insecure/uav.py        # terminal 1
 python3 v1_insecure/gcs.py        # terminal 2
+
+# 4. (optional) Run the web cockpit instead of the CLI
+python3 dashboard/app.py          # then open http://127.0.0.1:5050
 ```
 
 ## 📊 Results

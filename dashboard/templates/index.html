@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GCS Cockpit — UAV-01</title>
+<style>
+  :root{
+    --bg:#0a0f16; --panel:#111a27; --panel2:#0e1621; --line:#1e2d3f;
+    --txt:#d7e3ef; --muted:#6b8099; --cyan:#35e0d0; --green:#37d67a;
+    --amber:#f5a623; --red:#ff4d4d;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--txt);
+    font-family:'SF Mono','Menlo','Consolas',monospace;min-height:100vh;padding:16px;
+    background-image:linear-gradient(rgba(53,224,208,.03) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(53,224,208,.03) 1px,transparent 1px);
+    background-size:28px 28px;}
+  .top{display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .brand .t1{font-size:18px;font-weight:700;letter-spacing:2px;color:#fff;}
+  .brand .t2{font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
+  .status{display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:6px;
+    font-size:11px;letter-spacing:1px;border:1px solid var(--line);background:var(--panel2);}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);}
+  .dot.on{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .dot.off{background:var(--red);box-shadow:0 0 8px var(--red);}
+  .sec{border-color:#5a3d12;background:#2a1f0a;color:var(--amber);}
+  .sec.safe{border-color:#14502f;background:#0c2417;color:var(--green);}
+
+  .strip{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 16px;flex:1;min-width:140px;}
+  .stat .l{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;}
+  .stat .v{font-size:22px;font-weight:700;color:#fff;margin-top:3px;}
+  .batt-track{height:10px;background:var(--panel2);border-radius:6px;border:1px solid var(--line);overflow:hidden;margin-top:7px;}
+  .batt-fill{height:100%;background:var(--green);width:0%;transition:width .4s,background .4s;}
+
+  .gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin-bottom:14px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;}
+  .card .lab{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;}
+  .gauges .card{min-height:222px;}
+  .gauge-val{text-align:center;font-size:16px;font-weight:700;color:#fff;margin-top:2px;
+    white-space:nowrap;overflow:hidden;height:20px;}
+  .gauge-val small{font-size:11px;color:var(--muted);font-weight:400;}
+  svg{display:block;margin:0 auto;}
+
+  .bottom{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:760px){.bottom{grid-template-columns:1fr;}}
+  .deck{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:7px;
+    padding:12px;font-family:inherit;font-size:12px;letter-spacing:1px;cursor:pointer;transition:.15s;}
+  .btn:hover{border-color:var(--cyan);color:var(--cyan);background:#0c1b22;}
+  .btn.danger{grid-column:span 2;border-color:#5a1414;color:var(--red);}
+  .btn.danger:hover{background:#2a0c0c;border-color:var(--red);}
+  .log{height:150px;overflow-y:auto;margin-top:10px;}
+  .row{font-size:12px;padding:3px 0;border-bottom:1px solid #16212e;display:flex;gap:9px;}
+  .row .ts{color:var(--muted);}
+  .row.cmd .msg{color:var(--cyan);}
+  .row.crit .msg{color:var(--red);}
+  .down-banner{background:#2a0c0c;border:1px solid var(--red);color:var(--red);text-align:center;
+    padding:9px;border-radius:8px;margin-bottom:14px;letter-spacing:2px;font-weight:700;display:none;}
+  .down-banner.show{display:block;}
+  #map{width:100%;height:330px;border-radius:8px;background:#070d14;display:block;}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <div class="t1">◆ GROUND CONTROL STATION</div>
+    <div class="t2">UAV-01 · TELEMETRY &amp; COMMAND LINK</div>
+  </div>
+  <div class="status">
+    <span class="pill"><span class="dot" id="linkDot"></span><span id="linkTxt">LINK --</span></span>
+    <span class="pill sec" id="secPill">⚠ UNENCRYPTED LINK (v1)</span>
+  </div>
+</div>
+
+<div class="down-banner" id="downBanner">⚠ UAV DOWN — SIGNAL LOST</div>
+
+<div class="strip">
+  <div class="stat"><div class="l">Flight Time</div><div class="v" id="ftime">00:00</div></div>
+  <div class="stat"><div class="l">Battery</div><div class="v"><span id="bat">--</span>%</div>
+    <div class="batt-track"><div class="batt-fill" id="battFill"></div></div></div>
+  <div class="stat"><div class="l">Mode</div><div class="v" id="mode">MANUAL</div></div>
+</div>
+
+<div class="gauges">
+
+  <div class="card"><div class="lab">Attitude</div>
+    <svg viewBox="0 0 160 150" width="150" height="140">
+      <defs><clipPath id="ahClip"><circle cx="80" cy="72" r="58"/></clipPath></defs>
+      <g clip-path="url(#ahClip)">
+        <g id="ahMove">
+          <rect x="-150" y="-260" width="460" height="332" fill="#3d86c6"/>
+          <rect x="-150" y="72" width="460" height="332" fill="#6b4f2a"/>
+          <line x1="-150" y1="72" x2="310" y2="72" stroke="#fff" stroke-width="2"/>
+          <g stroke="#fff" stroke-width="1.5">
+            <line x1="60" y1="52" x2="100" y2="52"/><line x1="68" y1="62" x2="92" y2="62"/>
+            <line x1="68" y1="82" x2="92" y2="82"/><line x1="60" y1="92" x2="100" y2="92"/>
+          </g>
+        </g>
+      </g>
+      <circle cx="80" cy="72" r="58" fill="none" stroke="#1e2d3f" stroke-width="3"/>
+      <path d="M48 72 L68 72 M92 72 L112 72" stroke="#f5a623" stroke-width="3" fill="none"/>
+      <circle cx="80" cy="72" r="3" fill="#f5a623"/>
+      <polygon points="80,10 75,20 85,20" fill="#f5a623"/>
+    </svg>
+    <div class="gauge-val"><span id="pitchV">0</span>° pitch · <span id="rollV">0</span>° roll</div>
+  </div>
+
+  <div class="card"><div class="lab">Heading</div>
+    <svg viewBox="0 0 160 150" width="150" height="140">
+      <circle cx="80" cy="72" r="58" fill="#0e1621" stroke="#1e2d3f" stroke-width="2"/>
+      <g id="compassRose">
+        <text x="80" y="28" fill="#ff4d4d" font-size="13" font-weight="700" text-anchor="middle" font-family="monospace">N</text>
+        <text x="80" y="124" fill="#8da4bd" font-size="12" text-anchor="middle" font-family="monospace">S</text>
+        <text x="130" y="77" fill="#8da4bd" font-size="12" text-anchor="middle" font-family="monospace">E</text>
+        <text x="30" y="77" fill="#8da4bd" font-size="12" text-anchor="middle" font-family="monospace">W</text>
+        <g stroke="#3a4a5e" stroke-width="1">
+          <line x1="80" y1="16" x2="80" y2="24"/><line x1="80" y1="120" x2="80" y2="128"/>
+          <line x1="136" y1="72" x2="128" y2="72"/><line x1="24" y1="72" x2="32" y2="72"/>
+        </g>
+      </g>
+      <polygon points="80,34 74,72 86,72" fill="#ff4d4d"/>
+      <polygon points="80,110 74,72 86,72" fill="#3a4a5e"/>
+      <circle cx="80" cy="72" r="4" fill="#d7e3ef"/>
+    </svg>
+    <div class="gauge-val"><span id="hdgV">--</span>°</div>
+  </div>
+
+  <div class="card"><div class="lab">Air Speed</div>
+    <svg viewBox="0 0 160 150" width="150" height="140">
+      <path d="M 38 110 A 52 52 0 1 1 122 110" fill="none" stroke="#1e2d3f" stroke-width="8" stroke-linecap="round"/>
+      <path d="M 38 110 A 52 52 0 0 1 58 38" fill="none" stroke="#37d67a" stroke-width="8" stroke-linecap="round"/>
+      <path d="M 102 38 A 52 52 0 0 1 122 110" fill="none" stroke="#f5a623" stroke-width="8" stroke-linecap="round"/>
+      <g id="spdNeedle"><line x1="80" y1="72" x2="80" y2="28" stroke="#35e0d0" stroke-width="3"/></g>
+      <circle cx="80" cy="72" r="4" fill="#d7e3ef"/>
+      <text x="80" y="100" fill="#fff" font-size="20" font-weight="700" text-anchor="middle" font-family="monospace"><tspan id="spdBig">--</tspan></text>
+      <text x="80" y="115" fill="#6b8099" font-size="9" text-anchor="middle" font-family="monospace">km/h</text>
+    </svg>
+    <div class="gauge-val"><small>airspeed</small></div>
+  </div>
+
+  <div class="card"><div class="lab">Altitude</div>
+    <svg viewBox="0 0 160 150" width="150" height="140">
+      <path d="M 38 110 A 52 52 0 1 1 122 110" fill="none" stroke="#1e2d3f" stroke-width="8" stroke-linecap="round"/>
+      <g id="altNeedle"><line x1="80" y1="72" x2="80" y2="28" stroke="#35e0d0" stroke-width="3"/></g>
+      <circle cx="80" cy="72" r="4" fill="#d7e3ef"/>
+      <text x="80" y="100" fill="#fff" font-size="20" font-weight="700" text-anchor="middle" font-family="monospace"><tspan id="altBig">--</tspan></text>
+      <text x="80" y="115" fill="#6b8099" font-size="9" text-anchor="middle" font-family="monospace">meters</text>
+    </svg>
+    <div class="gauge-val"><small>altitude</small></div>
+  </div>
+
+  <div class="card"><div class="lab">Turn Coordinator</div>
+    <svg viewBox="0 0 160 150" width="150" height="140">
+      <circle cx="80" cy="72" r="58" fill="#0e1621" stroke="#1e2d3f" stroke-width="2"/>
+      <g stroke="#6b8099" stroke-width="1.5">
+        <line x1="22" y1="72" x2="34" y2="72"/><line x1="126" y1="72" x2="138" y2="72"/>
+      </g>
+      <g id="turnPlane">
+        <line x1="44" y1="72" x2="116" y2="72" stroke="#35e0d0" stroke-width="3"/>
+        <line x1="80" y1="60" x2="80" y2="84" stroke="#35e0d0" stroke-width="3"/>
+        <circle cx="80" cy="72" r="3" fill="#35e0d0"/>
+      </g>
+    </svg>
+    <div class="gauge-val"><span id="turnV">0</span>° bank</div>
+  </div>
+
+  <div class="card"><div class="lab">Vertical Speed</div>
+    <svg viewBox="0 0 160 150" width="150" height="140">
+      <circle cx="80" cy="72" r="58" fill="#0e1621" stroke="#1e2d3f" stroke-width="2"/>
+      <g stroke="#3a4a5e" stroke-width="1.5" font-family="monospace">
+        <line x1="22" y1="72" x2="32" y2="72"/><line x1="128" y1="72" x2="138" y2="72"/>
+        <line x1="80" y1="14" x2="80" y2="24"/><line x1="80" y1="120" x2="80" y2="130"/>
+      </g>
+      <text x="44" y="40" fill="#6b8099" font-size="9" text-anchor="middle" font-family="monospace">+</text>
+      <text x="44" y="112" fill="#6b8099" font-size="9" text-anchor="middle" font-family="monospace">−</text>
+      <g id="vsNeedle"><line x1="80" y1="72" x2="128" y2="72" stroke="#f5a623" stroke-width="3"/></g>
+      <circle cx="80" cy="72" r="4" fill="#d7e3ef"/>
+    </svg>
+    <div class="gauge-val"><span id="vsV">0.0</span> <small>m/s</small></div>
+  </div>
+
+</div>
+
+<div class="bottom">
+  <div>
+    <div class="card">
+      <div class="lab">Command Deck</div>
+      <div class="deck">
+        <button class="btn" onclick="cmd('CLIMB')">▲ CLIMB</button>
+        <button class="btn" onclick="cmd('DESCEND')">▼ DESCEND</button>
+        <button class="btn" onclick="cmd('TURN_LEFT')">◀ TURN LEFT</button>
+        <button class="btn" onclick="cmd('TURN_RIGHT')">TURN RIGHT ▶</button>
+        <button class="btn" onclick="cmd('SPEED_UP')">» SPEED UP</button>
+        <button class="btn" onclick="cmd('SLOW_DOWN')">« SLOW DOWN</button>
+        <button class="btn" onclick="cmd('RETURN_HOME')" style="grid-column:span 2;border-color:#14502f;color:#37d67a">⌂ RETURN HOME</button>
+        <button class="btn danger" onclick="cmd('SELF_DESTRUCT')">⚠ SELF DESTRUCT</button>
+      </div>
+      <div class="lab" style="margin-top:12px;">Event Log</div>
+      <div class="log" id="logBody"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="lab">GPS · Position &amp; Track</div>
+    <canvas id="map" width="560" height="330"></canvas>
+  </div>
+</div>
+
+<script>
+async function cmd(c){
+  await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({command:c})});
+}
+function battColor(p){ return p>50?'var(--green)':(p>20?'var(--amber)':'var(--red)'); }
+function fmtTime(s){ const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
+function lerpAngle(a,b,t){ let d=((b-a+540)%360)-180; return (a+d*t+360)%360; }
+
+// latest = sunucudan gelen hedef; disp = ekranda yumuşakça animasyonlu değerler
+let latest=null, meta={connected:false,secure:false,returning:false,active:true,log:[],flight_time:0,battery:0};
+let disp={altitude:0,speed:0,heading:90,roll:0,pitch:0,vspeed:0,x:0,y:0};
+let trail=[];
+
+function setRot(id,ang){ document.getElementById(id).setAttribute('transform','rotate('+ang+' 80 72)'); }
+
+function drawMap(){
+  const cv=document.getElementById('map'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  // iz biriktir (her karede, pürüzsüz çizgi)
+  if(trail.length===0 || Math.hypot(disp.x-trail[trail.length-1].x, disp.y-trail[trail.length-1].y)>0.6){
+    trail.push({x:disp.x,y:disp.y}); if(trail.length>800) trail.shift();
+  }
+  let pts=trail.concat([{x:0,y:0},{x:disp.x,y:disp.y}]);
+  let minX=Math.min(...pts.map(p=>p.x)), maxX=Math.max(...pts.map(p=>p.x));
+  let minY=Math.min(...pts.map(p=>p.y)), maxY=Math.max(...pts.map(p=>p.y));
+  let span=Math.max(maxX-minX,maxY-minY,80)*1.3;
+  let cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+  const size=Math.min(W,H)-48, sc=size/span;
+  const px=x=>W/2+(x-cx)*sc, py=y=>H/2-(y-cy)*sc;   // y kuzey yukarı
+
+  ctx.strokeStyle='#14202e'; ctx.lineWidth=1;
+  for(let g=-500;g<=500;g+=50){
+    ctx.beginPath(); ctx.moveTo(px(g),0); ctx.lineTo(px(g),H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,py(g)); ctx.lineTo(W,py(g)); ctx.stroke();
+  }
+  if(trail.length>1){
+    ctx.strokeStyle='#35e0d0'; ctx.lineWidth=2; ctx.globalAlpha=.7; ctx.beginPath();
+    trail.forEach((p,i)=>{ i?ctx.lineTo(px(p.x),py(p.y)):ctx.moveTo(px(p.x),py(p.y)); });
+    ctx.stroke(); ctx.globalAlpha=1;
+  }
+  const hx=px(0), hy=py(0);
+  ctx.strokeStyle='#37d67a'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(hx-7,hy+5); ctx.lineTo(hx,hy-6); ctx.lineTo(hx+7,hy+5); ctx.closePath(); ctx.stroke();
+  ctx.font='10px monospace'; ctx.fillStyle='#37d67a'; ctx.textAlign='center'; ctx.fillText('HOME',hx,hy+18);
+  const dx=px(disp.x), dy=py(disp.y), a=disp.heading*Math.PI/180;
+  ctx.save(); ctx.translate(dx,dy); ctx.rotate(a);
+  ctx.fillStyle=meta.active?'#35e0d0':'#ff4d4d';
+  ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(6,7); ctx.lineTo(0,3); ctx.lineTo(-6,7); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#6b8099'; ctx.font='10px monospace'; ctx.textAlign='left';
+  ctx.fillText('X: '+disp.x.toFixed(0)+' m   Y: '+disp.y.toFixed(0)+' m', 10, H-12);
+  if(meta.returning){ ctx.fillStyle='#37d67a'; ctx.textAlign='right'; ctx.fillText('↩ RETURNING HOME', W-10, 18); }
+}
+
+function render(){
+  // attitude
+  document.getElementById('ahMove').setAttribute('transform','rotate('+(-disp.roll)+' 80 72) translate(0 '+(disp.pitch*2.2)+')');
+  document.getElementById('pitchV').textContent=Math.round(disp.pitch);
+  document.getElementById('rollV').textContent=Math.round(disp.roll);
+  // heading
+  setRot('compassRose', -disp.heading);
+  document.getElementById('hdgV').textContent=Math.round(disp.heading);
+  // airspeed
+  setRot('spdNeedle', -135 + Math.min(disp.speed,120)/120*270);
+  document.getElementById('spdBig').textContent=Math.round(disp.speed);
+  // altitude
+  setRot('altNeedle', -135 + Math.min(disp.altitude,300)/300*270);
+  document.getElementById('altBig').textContent=Math.round(disp.altitude);
+  // turn coordinator
+  setRot('turnPlane', disp.roll);
+  document.getElementById('turnV').textContent=Math.round(disp.roll);
+  // vertical speed
+  setRot('vsNeedle', -Math.max(-8,Math.min(8,disp.vspeed))/8*80);
+  document.getElementById('vsV').textContent=(disp.vspeed>0?'+':'')+disp.vspeed.toFixed(1);
+  drawMap();
+}
+
+// 60 FPS: ekrandaki değerleri hedefe doğru yumuşakça kaydır
+function animate(){
+  requestAnimationFrame(animate);
+  if(latest){
+    const k=0.12;   // yumuşaklık (küçük=daha akışkan/yavaş)
+    disp.altitude += (latest.altitude-disp.altitude)*k;
+    disp.speed    += (latest.speed   -disp.speed)*k;
+    disp.heading   = lerpAngle(disp.heading, latest.heading, k);
+    disp.roll     += (latest.roll    -disp.roll)*k;
+    disp.pitch    += (latest.pitch   -disp.pitch)*k;
+    disp.vspeed   += (latest.vspeed  -disp.vspeed)*k;
+    disp.x        += (latest.x       -disp.x)*k;
+    disp.y        += (latest.y       -disp.y)*k;
+  }
+  render();
+}
+
+// Saniyede bir sunucudan hedef değerleri + durum bilgilerini al
+async function poll(){
+  try{
+    const r=await fetch('/api/state'); const s=await r.json(); const t=s.telemetry;
+    if(latest===null){ // ilk veri: ekranı anında hedefe eşitle (sıçramasın)
+      disp.altitude=t.altitude; disp.speed=t.speed; disp.heading=t.heading;
+      disp.roll=t.roll; disp.pitch=t.pitch; disp.vspeed=t.vspeed; disp.x=t.x; disp.y=t.y;
+    }
+    latest=t; meta=s;
+    // metin/durum (yavaş değişen, animasyon gerekmez)
+    document.getElementById('ftime').textContent=fmtTime(t.flight_time||0);
+    document.getElementById('bat').textContent=t.battery;
+    const bf=document.getElementById('battFill'); bf.style.width=t.battery+'%'; bf.style.background=battColor(t.battery);
+    document.getElementById('mode').textContent=t.returning?'RTH':'MANUAL';
+    const dot=document.getElementById('linkDot'), lt=document.getElementById('linkTxt');
+    if(s.connected){dot.className='dot on';lt.textContent='LINK UP';}else{dot.className='dot off';lt.textContent='LINK DOWN';}
+    const sp=document.getElementById('secPill');
+    if(s.secure){sp.className='pill sec safe';sp.textContent='🔒 AES-256 SECURED';}
+    else{sp.className='pill sec';sp.textContent='⚠ UNENCRYPTED LINK (v1)';}
+    document.getElementById('downBanner').className=(t.active===false)?'down-banner show':'down-banner';
+    document.getElementById('logBody').innerHTML=s.log.map(e=>
+      '<div class="row '+(e.kind||'')+'"><span class="ts">'+e.t+'</span><span class="msg">'+e.msg+'</span></div>').join('');
+  }catch(e){
+    document.getElementById('linkDot').className='dot off';
+    document.getElementById('linkTxt').textContent='NO SERVER';
+  }
+}
+setInterval(poll,1000); poll();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
