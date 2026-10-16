@@ -84,7 +84,7 @@ iha-guvenlik/
 
 ```bash
 # 1. Clone
-git clone https://github.com/onurhayta/iha-guvenlik.git
+git clone https://github.com/onurhayta/secure-uav-telemetry-command-protocol.git
 cd iha-guvenlik
 
 # 2. Install dependencies
