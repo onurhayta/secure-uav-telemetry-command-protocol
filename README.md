@@ -88,8 +88,8 @@ iha-guvenlik/
 
 ```bash
 # 1. Clone
-git clone https://github.com/onurhayta/iha-guvenlik.git
-cd iha-guvenlik
+git clone https://github.com/onurhayta/secure-uav-telemetry-command-protocol.git
+cd secure-uav-telemetry-command-protocol
 
 # 2. Install dependencies
 pip3 install cryptography matplotlib flask
