@@ -1,0 +1,28 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ---- Sanal ortam ----
+.venv/
+venv/
+env/
+
+# ---- İşletim sistemi ----
+.DS_Store
+Thumbs.db
+
+# ---- Editör ----
+.vscode/
+.idea/
+*.swp
+
+# ---- Loglar / geçici ----
+*.log
+*.tmp
+
+# ---- Gizli anahtarlar (ASLA repoya girmesin!) ----
+*.key
+*.pem
+secrets.txt
